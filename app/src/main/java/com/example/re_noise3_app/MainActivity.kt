@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
 
         camera_btn.setOnClickListener {
 
-
+            aaa
 
         }
 
