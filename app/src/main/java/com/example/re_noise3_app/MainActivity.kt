@@ -1,16 +1,25 @@
 package com.example.re_noise3_app
 
 import android.Manifest
+import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import kotlinx.android.synthetic.main.activity_main.*
 import org.opencv.android.OpenCVLoader
+import java.io.File
+import java.io.FileOutputStream
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,6 +28,9 @@ class MainActivity : AppCompatActivity() {
         const val CAMERA_PERMISSION_REQUEST_CODE = 2
         const val External_Strage_REQUEST_CODE = 3
     }
+
+    private lateinit var image : Bitmap
+    private lateinit var mImageUri : Uri
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,10 +97,118 @@ class MainActivity : AppCompatActivity() {
 
         camera_btn.setOnClickListener {
 
-            aaa
+            takePicture()
 
+            //camera_transを起動するための、intentを初期化する
+            val intent = Intent(this, transformation::class.java)
+
+            saveFile(createFile(), image)
+
+            //bitmapをUriに変換する
+            val uri: Uri = bitmapToUri(image)
+
+            //intentにUriをセットする
+            intent.putExtra("uri", uri)
+
+            //camera_viewを起動する
+            startActivity(intent)
+
+        }
+    }
+
+    private fun takePicture() {
+        val filename : String = System.currentTimeMillis().toString()
+
+        val values = ContentValues()
+
+        values.put(MediaStore.Images.Media.TITLE, filename)
+
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+
+
+        val mImageUri_kari = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+
+        if (mImageUri_kari != null){
+            mImageUri = mImageUri_kari
         }
 
 
+        val intent : Intent = Intent()
 
+        intent.setAction(MediaStore.ACTION_IMAGE_CAPTURE)
+
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, mImageUri)
+
+
+        startActivityForResult(intent, CAMERA_REQUEST_CODE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == CAMERA_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK) {
+
+                image = MediaStore.Images.Media.getBitmap(this.contentResolver, mImageUri) as Bitmap
+
+            }
+        }
+    }
+
+    private fun createFile(): File {
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+        val date = Date()
+        println("日付" + date)
+        return File(dir, date.toString() + ".png")
+    }
+
+    private fun saveFile(f: File, bitmap: Bitmap) {
+
+        var bit: Bitmap = bitmap
+
+
+        val ops = FileOutputStream(f)
+
+        bit.compress(Bitmap.CompressFormat.PNG, 100, ops)
+
+
+        ops.close()
+
+        //ギャラリーからもアクセスできるように、画像データとしてAndroidに登録
+        val contextValues = ContentValues().apply {
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put("_data", f.absolutePath)
+        }
+
+        contentResolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contextValues
+        )
+
+    }
+
+    private fun bitmapToUri(bitmap: Bitmap) : Uri {
+
+        //一時ファイル作成用のキャッシュディレクトリを定義する
+        val cacheDir : File = this.cacheDir
+
+        //現在日時からファイル名を生成する
+        val fileName : String = System.currentTimeMillis().toString() + ".png"
+
+        //空のファイルを作成する
+        val file = File(cacheDir, fileName)
+
+        //ファイルにバイトデータを書き込み開始する
+        val fileOutputStream : FileOutputStream? = FileOutputStream(file)
+
+        //ファイルにbitmapを書き込む
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream)
+
+        //ファイルにバイトデータの書き込みを終了する
+        fileOutputStream?.close()
+
+        //ファイルからcontent://スキーマ形式のuriを取得する
+        val contentSchemaUri : Uri = FileProvider.getUriForFile(this, "com.hoge.fuga.fileproviders", file)
+
+        return contentSchemaUri
+    }
 }
